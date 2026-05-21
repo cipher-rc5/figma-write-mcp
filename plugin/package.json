@@ -1,0 +1,19 @@
+{
+  "name": "figma-write-mcp-plugin",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "bun@1.3.14",
+  "engines": {
+    "bun": ">=1.3.0"
+  },
+  "scripts": {
+    "build": "tsgo -p tsconfig.json",
+    "watch": "tsgo -p tsconfig.json --watch",
+    "typecheck": "tsgo -p tsconfig.json --noEmit"
+  },
+  "devDependencies": {
+    "@figma/plugin-typings": "1.126.0",
+    "@typescript/native-preview": "7.0.0-dev.20260519.1",
+    "bun-types": "1.3.14"
+  }
+}

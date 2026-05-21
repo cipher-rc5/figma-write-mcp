@@ -1,0 +1,90 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <style>
+      body { font: 12px -apple-system, system-ui, sans-serif; margin: 12px; color: #111; }
+      .status { padding: 6px 8px; border-radius: 4px; margin-bottom: 8px; }
+      .ok { background: #e7f6ec; color: #0a6b2c; }
+      .bad { background: #fdecec; color: #8a1f1f; }
+      .row { display: flex; gap: 8px; align-items: center; }
+      button { font: inherit; padding: 4px 8px; }
+      pre { background: #f5f5f5; padding: 6px; border-radius: 4px; max-height: 140px; overflow: auto; }
+    </style>
+  </head>
+  <body>
+    <div id="status" class="status bad">disconnected</div>
+    <div class="row">
+      <button id="reconnect">Reconnect</button>
+      <span id="addr"></span>
+    </div>
+    <h4>Log</h4>
+    <pre id="log"></pre>
+    <script>
+      // The UI iframe holds the WebSocket. The Figma plugin sandbox (code.js)
+      // cannot open raw sockets, so we proxy every message through here.
+      // Keep BRIDGE_WS_URL in sync with manifest.json `allowedDomains` and the
+      // Rust server's BRIDGE_ADDR — Figma's manifest requires literal strings,
+      // so the address can't be imported from a single source.
+      const BRIDGE_WS_URL = "ws://127.0.0.1:7341";
+      const RECONNECT_MS = 1500;
+      const LOG_MAX_LINES = 50;
+
+      const statusEl = document.getElementById("status");
+      const logEl = document.getElementById("log");
+      document.getElementById("addr").textContent = BRIDGE_WS_URL;
+      let ws = null;
+      let reconnectTimer = null;
+
+      function log(line) {
+        const ts = new Date().toLocaleTimeString();
+        logEl.textContent = `[${ts}] ${line}\n` + logEl.textContent;
+        logEl.textContent = logEl.textContent.split("\n").slice(0, LOG_MAX_LINES).join("\n");
+      }
+
+      function setStatus(connected) {
+        statusEl.className = "status " + (connected ? "ok" : "bad");
+        statusEl.textContent = connected ? "connected to bridge" : "disconnected";
+      }
+
+      function connect() {
+        if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return;
+        try {
+          ws = new WebSocket(BRIDGE_WS_URL);
+        } catch (e) {
+          log("ws constructor failed: " + e.message);
+          scheduleReconnect();
+          return;
+        }
+        ws.onopen = () => { setStatus(true); log("connected"); };
+        ws.onclose = () => { setStatus(false); log("closed"); scheduleReconnect(); };
+        ws.onerror = () => { log("ws error"); };
+        ws.onmessage = (ev) => {
+          // Forward server -> plugin requests into the sandbox.
+          parent.postMessage({ pluginMessage: { kind: "from-bridge", payload: ev.data } }, "*");
+        };
+      }
+
+      function scheduleReconnect() {
+        if (reconnectTimer) return;
+        reconnectTimer = setTimeout(() => { reconnectTimer = null; connect(); }, RECONNECT_MS);
+      }
+
+      // Sandbox -> bridge: code.js asks us to forward a response.
+      window.onmessage = (event) => {
+        const msg = event.data.pluginMessage;
+        if (!msg) return;
+        if (msg.kind === "to-bridge" && ws && ws.readyState === WebSocket.OPEN) {
+          ws.send(msg.payload);
+        }
+      };
+
+      document.getElementById("reconnect").onclick = () => {
+        if (ws) try { ws.close(); } catch {}
+        connect();
+      };
+
+      connect();
+    </script>
+  </body>
+</html>

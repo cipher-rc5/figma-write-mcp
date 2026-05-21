@@ -1,0 +1,18 @@
+{
+  "name": "Figma Write MCP Bridge",
+  "id": "figma-write-mcp-bridge",
+  "api": "0.1.0",
+  "main": "dist/code.js",
+  "ui": "ui.html",
+  "editorType": [
+    "figma",
+    "figjam"
+  ],
+  "networkAccess": {
+    "allowedDomains": [
+      "http://127.0.0.1:7341",
+      "ws://127.0.0.1:7341"
+    ],
+    "reasoning": "Connects to the local figma-write-mcp bridge over WebSocket on 127.0.0.1:7341."
+  }
+}

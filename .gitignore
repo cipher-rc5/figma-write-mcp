@@ -1,0 +1,84 @@
+# ─── Secrets ──────────────────────────────────────────────────────────────────
+.env
+.env.*
+!.env.example
+!.env.*.example
+*.pem
+*.key
+*.p12
+*.pfx
+*.crt
+secrets/
+.secrets/
+
+# ─── Node / Bun (plugin/) ─────────────────────────────────────────────────────
+node_modules/
+.pnp.*
+.yarn/
+.npm/
+.bun/
+bun-debug.log
+bun-error.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Build output
+dist/
+build/
+out/
+*.tsbuildinfo
+.tscache/
+
+# Test / coverage
+coverage/
+.nyc_output/
+*.lcov
+
+# ─── Rust (server/) ───────────────────────────────────────────────────────────
+target/
+**/*.rs.bk
+*.pdb
+# Cargo.lock is kept (server is a binary, not a library).
+
+# ─── Editors / IDEs ───────────────────────────────────────────────────────────
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+.idea/
+*.iml
+*.swp
+*.swo
+*~
+.DS_Store
+.AppleDouble
+.LSOverride
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# ─── Logs / temp ──────────────────────────────────────────────────────────────
+*.log
+logs/
+tmp/
+temp/
+*.pid
+*.seed
+*.pid.lock
+
+# ─── Claude Code local overrides ──────────────────────────────────────────────
+# Match at any depth (root and per-subproject .claude/ dirs).
+**/.claude/settings.local.json
+**/.claude/.credentials*
+**/.claude/cache/
+**/.claude/projects/
+
+# ─── Misc ─────────────────────────────────────────────────────────────────────
+.cache/
+.parcel-cache/
+.next/
+.turbo/
+.vercel/

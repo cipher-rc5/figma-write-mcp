@@ -1,0 +1,8 @@
+[install]
+exact = true
+peer = true
+saveTextLockfile = true
+auto = "disable"
+
+[install.registry]
+url = "https://registry.npmjs.org/"
