@@ -7,84 +7,204 @@
       .status { padding: 6px 8px; border-radius: 4px; margin-bottom: 8px; }
       .ok { background: #e7f6ec; color: #0a6b2c; }
       .bad { background: #fdecec; color: #8a1f1f; }
-      .row { display: flex; gap: 8px; align-items: center; }
+      .warn { background: #fff6da; color: #6b4f08; }
+      .row { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
       button { font: inherit; padding: 4px 8px; }
       pre { background: #f5f5f5; padding: 6px; border-radius: 4px; max-height: 140px; overflow: auto; }
+      .secret-row { display: none; flex-direction: column; gap: 6px; }
+      .secret-row input { font: inherit; padding: 4px 6px; }
+      .secret-row .hint { color: #555; }
+      h4 { margin: 8px 0 4px; }
     </style>
   </head>
   <body>
     <div id="status" class="status bad">disconnected</div>
     <div class="row">
       <button id="reconnect">Reconnect</button>
+      <button id="forget-secret">Forget secret</button>
       <span id="addr"></span>
+    </div>
+    <div id="secret-row" class="secret-row">
+      <div class="hint">
+        Paste the bridge secret printed by the MCP server on first launch.
+      </div>
+      <input id="secret-input" type="password" placeholder="bridge secret" autocomplete="off" />
+      <div class="row">
+        <button id="save-secret">Save</button>
+        <span id="secret-status"></span>
+      </div>
     </div>
     <h4>Log</h4>
     <pre id="log"></pre>
     <script>
       // The UI iframe holds the WebSocket. The Figma plugin sandbox (code.js)
       // cannot open raw sockets, so we proxy every message through here.
-      // Keep BRIDGE_WS_URL in sync with manifest.json `allowedDomains` and the
-      // Rust server's BRIDGE_ADDR — Figma's manifest requires literal strings,
-      // so the address can't be imported from a single source.
-      const BRIDGE_WS_URL = "ws://127.0.0.1:7341";
+      // The bridge requires an authenticated hello as the first frame on every
+      // connection; the sandbox is the persistent place to remember the secret
+      // (via figma.clientStorage) so the iframe asks it on load.
+      const BRIDGE_WS_URL = 'ws://127.0.0.1:7341';
+      const PROTOCOL_VERSION = 1;
       const RECONNECT_MS = 1500;
       const LOG_MAX_LINES = 50;
 
-      const statusEl = document.getElementById("status");
-      const logEl = document.getElementById("log");
-      document.getElementById("addr").textContent = BRIDGE_WS_URL;
+      const statusEl = document.getElementById('status');
+      const logEl = document.getElementById('log');
+      const secretRow = document.getElementById('secret-row');
+      const secretInput = document.getElementById('secret-input');
+      const secretStatus = document.getElementById('secret-status');
+      document.getElementById('addr').textContent = BRIDGE_WS_URL;
       let ws = null;
       let reconnectTimer = null;
+      let secret = null;
+      // Connection lifecycle: 'idle' | 'authenticating' | 'connected'
+      let phase = 'idle';
 
       function log(line) {
         const ts = new Date().toLocaleTimeString();
         logEl.textContent = `[${ts}] ${line}\n` + logEl.textContent;
-        logEl.textContent = logEl.textContent.split("\n").slice(0, LOG_MAX_LINES).join("\n");
+        logEl.textContent = logEl.textContent.split('\n').slice(0, LOG_MAX_LINES).join('\n');
       }
 
-      function setStatus(connected) {
-        statusEl.className = "status " + (connected ? "ok" : "bad");
-        statusEl.textContent = connected ? "connected to bridge" : "disconnected";
+      function setStatus(text, cls) {
+        statusEl.className = 'status ' + cls;
+        statusEl.textContent = text;
+      }
+
+      function showSecretPrompt(show) {
+        secretRow.style.display = show ? 'flex' : 'none';
       }
 
       function connect() {
+        if (!secret) {
+          setStatus('waiting for secret', 'warn');
+          showSecretPrompt(true);
+          return;
+        }
         if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return;
+        showSecretPrompt(false);
+        setStatus('connecting', 'warn');
         try {
           ws = new WebSocket(BRIDGE_WS_URL);
         } catch (e) {
-          log("ws constructor failed: " + e.message);
+          log('ws constructor failed: ' + e.message);
           scheduleReconnect();
           return;
         }
-        ws.onopen = () => { setStatus(true); log("connected"); };
-        ws.onclose = () => { setStatus(false); log("closed"); scheduleReconnect(); };
-        ws.onerror = () => { log("ws error"); };
-        ws.onmessage = (ev) => {
-          // Forward server -> plugin requests into the sandbox.
-          parent.postMessage({ pluginMessage: { kind: "from-bridge", payload: ev.data } }, "*");
+        ws.onopen = () => {
+          phase = 'authenticating';
+          setStatus('authenticating', 'warn');
+          log('connected, sending hello');
+          ws.send(JSON.stringify({ op: 'hello', protocol_version: PROTOCOL_VERSION, secret }));
         };
+        ws.onclose = () => {
+          phase = 'idle';
+          setStatus('disconnected', 'bad');
+          log('closed');
+          scheduleReconnect();
+        };
+        ws.onerror = () => {
+          log('ws error');
+        };
+        ws.onmessage = (ev) => {
+          if (phase === 'authenticating') {
+            handleHelloResponse(ev.data);
+            return;
+          }
+          // Forward server -> plugin requests into the sandbox.
+          parent.postMessage({ pluginMessage: { kind: 'from-bridge', payload: ev.data } }, '*');
+        };
+      }
+
+      function handleHelloResponse(data) {
+        let msg = null;
+        try {
+          msg = JSON.parse(data);
+        } catch (e) {
+          log('hello reply not JSON; closing');
+          try { ws.close(); } catch {}
+          return;
+        }
+        if (msg && msg.op === 'hello_ok') {
+          phase = 'connected';
+          setStatus('connected to bridge', 'ok');
+          log('authenticated, protocol_version=' + msg.protocol_version);
+          return;
+        }
+        if (msg && msg.op === 'hello_err') {
+          const code = msg.code || 'unknown';
+          const message = msg.message || 'unknown';
+          log(`hello rejected: [${code}] ${message}`);
+          setStatus('auth failed: ' + code, 'bad');
+          try { ws.close(); } catch {}
+          // If the secret was wrong, drop it so the user is re-prompted.
+          if (code === 'auth_failed') {
+            parent.postMessage({ pluginMessage: { kind: 'clear-secret' } }, '*');
+          }
+          return;
+        }
+        log('unexpected pre-auth frame; closing');
+        try { ws.close(); } catch {}
       }
 
       function scheduleReconnect() {
         if (reconnectTimer) return;
-        reconnectTimer = setTimeout(() => { reconnectTimer = null; connect(); }, RECONNECT_MS);
+        reconnectTimer = setTimeout(() => {
+          reconnectTimer = null;
+          connect();
+        }, RECONNECT_MS);
       }
 
-      // Sandbox -> bridge: code.js asks us to forward a response.
+      // Sandbox -> bridge: code.js asks us to forward a response, or tells us
+      // the current secret, or asks us to log a dropped frame.
       window.onmessage = (event) => {
-        const msg = event.data.pluginMessage;
-        if (!msg) return;
-        if (msg.kind === "to-bridge" && ws && ws.readyState === WebSocket.OPEN) {
-          ws.send(msg.payload);
+        const msg = event.data && event.data.pluginMessage;
+        if (!msg || typeof msg.kind !== 'string') return;
+        if (msg.kind === 'to-bridge') {
+          if (ws && ws.readyState === WebSocket.OPEN && phase === 'connected') ws.send(msg.payload);
+          else log('drop outgoing frame: ws not ready (phase=' + phase + ')');
+          return;
+        }
+        if (msg.kind === 'set-secret') {
+          secret = typeof msg.secret === 'string' ? msg.secret : null;
+          if (!secret) {
+            secretInput.value = '';
+            setStatus('waiting for secret', 'warn');
+            showSecretPrompt(true);
+            secretStatus.textContent = '';
+          } else {
+            showSecretPrompt(false);
+            connect();
+          }
+          return;
+        }
+        if (msg.kind === 'log') {
+          log(msg.line);
+          return;
         }
       };
 
-      document.getElementById("reconnect").onclick = () => {
+      document.getElementById('reconnect').onclick = () => {
         if (ws) try { ws.close(); } catch {}
         connect();
       };
 
-      connect();
+      document.getElementById('forget-secret').onclick = () => {
+        if (ws) try { ws.close(); } catch {}
+        parent.postMessage({ pluginMessage: { kind: 'clear-secret' } }, '*');
+      };
+
+      document.getElementById('save-secret').onclick = () => {
+        const value = secretInput.value.trim();
+        if (!value) {
+          secretStatus.textContent = 'secret cannot be empty';
+          return;
+        }
+        secretStatus.textContent = 'saving…';
+        parent.postMessage({ pluginMessage: { kind: 'save-secret', secret: value } }, '*');
+      };
+
+      // Tell the sandbox we're ready so it can hand us the stored secret.
+      parent.postMessage({ pluginMessage: { kind: 'ui-ready' } }, '*');
     </script>
   </body>
 </html>

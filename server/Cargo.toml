@@ -2,18 +2,31 @@
 name = "figma-write-mcp"
 version = "0.1.0"
 edition = "2024"
+description = "Local MCP server that bridges write operations to a Figma plugin over an authenticated loopback socket."
+license = "MIT"
+repository = "https://github.com/cipher/figma-write-mcp"
+homepage = "https://github.com/cipher/figma-write-mcp"
+readme = "../README.md"
+keywords = ["mcp", "figma", "claude", "plugin", "bridge"]
+categories = ["command-line-utilities", "development-tools"]
 
 [dependencies]
 anyhow = "1"
+base64 = "0.22"
 futures-util = "0.3"
+rand = "0.8"
 rmcp = { version = "1.7", features = ["server", "transport-io"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-tokio = { version = "1", features = ["full"] }
+subtle = "2"
+tokio = { version = "1", features = ["fs", "io-util", "macros", "net", "rt-multi-thread", "signal", "sync", "time"] }
 tokio-tungstenite = "0.29"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 uuid = { version = "1", features = ["v4"] }
+
+[dev-dependencies]
+tokio = { version = "1", features = ["test-util"] }
 
 [[bin]]
 name = "figma-write-mcp"

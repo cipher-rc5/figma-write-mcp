@@ -27,21 +27,21 @@ build-server:
 build-server-debug:
     cd {{server_dir}} && cargo build
 
-# Compile the Figma plugin TypeScript to dist/
+# Bundle the Figma plugin TypeScript into dist/code.js
 build-plugin:
     cd {{plugin_dir}} && bun run build
 
-# Watch and recompile the plugin on change
+# Watch and rebundle the plugin on change
 watch-plugin:
     cd {{plugin_dir}} && bun run watch
 
-# Typecheck the plugin without emitting
+# Typecheck the plugin (sandbox + tests)
 typecheck:
     cd {{plugin_dir}} && bun run typecheck
 
 # Run cargo check on the server
 check:
-    cd {{server_dir}} && cargo check
+    cd {{server_dir}} && cargo check --all-targets
 
 # Run cargo clippy on the server
 lint:
@@ -57,7 +57,18 @@ fmt-check:
 
 # Run cargo tests on the server
 test:
-    cd {{server_dir}} && cargo test
+    cd {{server_dir}} && cargo test --all-targets
+
+# Run plugin unit tests (bun test)
+test-plugin:
+    cd {{plugin_dir}} && bun test
+
+# Run every gate CI runs
+ci: fmt-check lint test typecheck test-plugin build
+
+# Run cargo audit (requires `cargo install cargo-audit`)
+audit:
+    cd {{server_dir}} && cargo audit --deny warnings
 
 # Run the server directly (stdio MCP); for manual probing
 run: build-server
@@ -74,6 +85,10 @@ inspect-debug: build-server-debug
 # Print whether port 7341 (the plugin bridge) is bound
 bridge-status:
     @lsof -nP -iTCP:7341 -sTCP:LISTEN || echo "port 7341 is free (server not running)"
+
+# Print the on-disk bridge secret (use to paste into the plugin window)
+print-secret:
+    @cat "${FIGMA_WRITE_MCP_HOME:-$HOME/Library/Application Support/figma-write-mcp}/secret" 2>/dev/null || echo "secret not yet generated (run the server once to create it)"
 
 claude_config := env_var('HOME') / "Library/Application Support/Claude/claude_desktop_config.json"
 

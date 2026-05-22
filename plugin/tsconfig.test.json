@@ -3,7 +3,7 @@
     "target": "esnext",
     "module": "esnext",
     "moduleResolution": "bundler",
-    "lib": ["esnext"],
+    "lib": ["esnext", "dom"],
     "strict": true,
     "noUncheckedIndexedAccess": true,
     "noImplicitOverride": true,
@@ -11,10 +11,9 @@
     "noPropertyAccessFromIndexSignature": true,
     "noImplicitReturns": true,
     "exactOptionalPropertyTypes": true,
-    "types": [],
-    "outDir": "dist",
+    "types": ["bun-types"],
+    "noEmit": true,
     "rootDir": "."
   },
-  "include": ["code.ts", "helpers.ts", "node_modules/@figma/plugin-typings/index.d.ts"],
-  "exclude": ["dist", "helpers.test.ts"]
+  "include": ["helpers.ts", "helpers.test.ts"]
 }
