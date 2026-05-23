@@ -20,7 +20,7 @@ use std::time::Duration;
 use anyhow::{Context, Result, anyhow};
 use base64::Engine;
 use futures_util::{SinkExt, StreamExt};
-use rand::RngCore;
+use rand::Rng;
 use rmcp::{
     ErrorData as McpError, RoleServer, ServerHandler, ServiceExt,
     model::{
@@ -461,7 +461,7 @@ fn load_or_create_secret(dir: &std::path::Path) -> Result<(String, bool)> {
     }
 
     let mut buf = [0u8; SECRET_BYTES];
-    rand::thread_rng().fill_bytes(&mut buf);
+    rand::rng().fill_bytes(&mut buf);
     let secret = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(buf);
 
     std::fs::write(&path, &secret).with_context(|| format!("writing {}", path.display()))?;
@@ -858,11 +858,11 @@ mod tests {
     // Property-style randomised parser fuzz: parse_hello must never panic.
     #[test]
     fn validate_hello_never_panics_on_random_input() {
-        use rand::Rng;
-        let mut rng = rand::thread_rng();
+        use rand::{Rng, RngExt};
+        let mut rng = rand::rng();
         for _ in 0..1024 {
-            let len = rng.gen_range(0..256);
-            let bytes: Vec<u8> = (0..len).map(|_| rng.r#gen::<u8>()).collect();
+            let len = rng.random_range(0..256);
+            let bytes: Vec<u8> = (0..len).map(|_| rng.random::<u8>()).collect();
             // Force valid UTF-8 by replacing invalid bytes.
             let s: String = bytes
                 .iter()
@@ -874,11 +874,11 @@ mod tests {
 
     #[test]
     fn plugin_response_never_panics_on_random_input() {
-        use rand::Rng;
-        let mut rng = rand::thread_rng();
+        use rand::{Rng, RngExt};
+        let mut rng = rand::rng();
         for _ in 0..1024 {
-            let len = rng.gen_range(0..256);
-            let bytes: Vec<u8> = (0..len).map(|_| rng.r#gen::<u8>()).collect();
+            let len = rng.random_range(0..256);
+            let bytes: Vec<u8> = (0..len).map(|_| rng.random::<u8>()).collect();
             let s: String = bytes
                 .iter()
                 .map(|b| char::from_u32((*b as u32) % 0x80).unwrap_or('?'))
